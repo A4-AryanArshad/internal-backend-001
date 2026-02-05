@@ -21,9 +21,12 @@ const app = express()
 const PORT = 3001
 
 // Middleware
-// CORS configuration - hardcoded frontend URL (deployed frontend)
-const FRONTEND_URL = 'https://internal-frontend-two.vercel.app'
-const allowedOrigins = [FRONTEND_URL]
+// CORS configuration - support both local and deployed frontend
+const LOCAL_FRONTEND = 'http://localhost:5173'
+const DEPLOYED_FRONTEND = 'https://internal-frontend-two.vercel.app'
+// Use deployed URL on Vercel, localhost when running locally
+const FRONTEND_URL = process.env.VERCEL === '1' ? DEPLOYED_FRONTEND : LOCAL_FRONTEND
+const allowedOrigins = [LOCAL_FRONTEND, 'http://127.0.0.1:5173', DEPLOYED_FRONTEND]
 
 app.use(cors({
   origin: (origin, callback) => {
