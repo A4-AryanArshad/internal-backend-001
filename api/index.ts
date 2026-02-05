@@ -16,7 +16,7 @@ const connectDB = async () => {
   }
 }
 
-// Connect on module load
+
 connectDB().catch(console.error)
 
 export default app
