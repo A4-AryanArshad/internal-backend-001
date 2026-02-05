@@ -1,7 +1,10 @@
 import mongoose from 'mongoose'
 
 // Hardcoded MongoDB connection string
-const MONGODB_URI = 'mongodb+srv://ali:ali@cluster0.o8bu9nt.mongodb.net/'
+const MONGODB_URI =
+  'mongodb+srv://ali:ali@cluster0.o8bu9nt.mongodb.net/client-project-portal'
+
+
 
 // Cache the connection to reuse in serverless environments
 let cachedConnection: typeof mongoose | null = null
