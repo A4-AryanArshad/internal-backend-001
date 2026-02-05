@@ -199,8 +199,8 @@ export class CollaboratorController {
         await collaborator.save()
       }
 
-      // Hardcoded frontend URL
-      const FRONTEND_URL = 'http://localhost:5173' // Update this to your production URL when deploying
+      // Hardcoded frontend URL (deployed frontend)
+      const FRONTEND_URL = 'https://internal-frontend-two.vercel.app'
       const refreshUrl = `${FRONTEND_URL}/collaborator/stripe/refresh`
       const returnUrl = `${FRONTEND_URL}/collaborator/stripe/return`
 

@@ -42,7 +42,7 @@ export const sendClientDashboardEmail = async (
   projectName: string
 ) => {
   const transporter = createTransporter()
-  const FRONTEND_URL = 'http://localhost:5173' // Update this to your production URL when deploying
+  const FRONTEND_URL = 'https://internal-frontend-two.vercel.app'
   const dashboardUrl = `${FRONTEND_URL}/client/${projectId}/dashboard`
 
   // Log the dashboard link to console for easy access during development

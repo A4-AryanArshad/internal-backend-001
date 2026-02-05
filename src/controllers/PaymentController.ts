@@ -42,8 +42,8 @@ export class PaymentController {
 
       // Create Stripe checkout session
       const stripe = getStripe()
-      // Hardcoded frontend URL
-      const FRONTEND_URL = 'http://localhost:5173' // Update this to your production URL when deploying
+      // Hardcoded frontend URL (deployed frontend)
+      const FRONTEND_URL = 'https://internal-frontend-two.vercel.app'
       const session = await stripe.checkout.sessions.create({
         payment_method_types: ['card'],
         line_items: [

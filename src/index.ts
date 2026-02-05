@@ -21,8 +21,8 @@ const app = express()
 const PORT = 3001
 
 // Middleware
-// CORS configuration - hardcoded frontend URL
-const FRONTEND_URL = 'http://localhost:5173' // Update this to your production URL when deploying
+// CORS configuration - hardcoded frontend URL (deployed frontend)
+const FRONTEND_URL = 'https://internal-frontend-two.vercel.app'
 const allowedOrigins = [FRONTEND_URL]
 
 app.use(cors({
