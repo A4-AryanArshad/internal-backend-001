@@ -42,7 +42,7 @@ mongoose.connection.on('disconnected', () => {
   console.log('MongoDB disconnected')
 })
 
-mongoose.connection.on('error', (err) => {
+mongoose.connection.on('error', (err: unknown) => {
   console.error('MongoDB error:', err)
 })
 

@@ -2,15 +2,16 @@ import { Request, Response } from 'express'
 import { CustomQuote } from '../models/CustomQuote'
 import { Project } from '../models/Project'
 import { ApiResponse } from '../views/response'
-import { AuthRequest } from '../middleware/auth'
+import type { AuthRequest } from '../middleware/auth'
 
 export class CustomQuoteController {
   // Request a custom quote (client)
-  static async requestCustomQuote(req: AuthRequest, res: Response) {
+  static async requestCustomQuote(req: Request, res: Response) {
     try {
+      const authReq = req as AuthRequest
       const { projectId } = req.params
       const { description, estimated_budget, preferred_timeline } = req.body
-      const userId = req.user?.userId
+      const userId = authReq.user?.userId
 
       if (!userId) {
         return ApiResponse.error(res, 'User not authenticated', 401)
@@ -108,11 +109,12 @@ export class CustomQuoteController {
   }
 
   // Accept custom quote (client)
-  static async acceptCustomQuote(req: AuthRequest, res: Response) {
+  static async acceptCustomQuote(req: Request, res: Response) {
     try {
+      const authReq = req as AuthRequest
       const { quoteId } = req.params
-      const userId = req.user?.userId
-      const userEmail = req.user?.email
+      const userId = authReq.user?.userId
+      const userEmail = authReq.user?.email
 
       if (!userId || !userEmail) {
         return ApiResponse.error(res, 'User not authenticated', 401)
@@ -160,11 +162,12 @@ export class CustomQuoteController {
   }
 
   // Request a standalone custom quote (from client dashboard, no project required)
-  static async requestStandaloneQuote(req: AuthRequest, res: Response) {
+  static async requestStandaloneQuote(req: Request, res: Response) {
     try {
+      const authReq = req as AuthRequest
       const { description, estimated_budget, preferred_timeline } = req.body
-      const userId = req.user?.userId
-      const userEmail = req.user?.email
+      const userId = authReq.user?.userId
+      const userEmail = authReq.user?.email
 
       if (!userId || !userEmail) {
         return ApiResponse.error(res, 'User not authenticated', 401)

@@ -1,4 +1,5 @@
 import { Request, Response } from 'express'
+import type Stripe from 'stripe'
 import { Collaborator } from '../models/Collaborator'
 import { User } from '../models/User'
 import { Project } from '../models/Project'
@@ -256,7 +257,7 @@ export class CollaboratorController {
       }
 
       // Get balance from connected account
-      let balance = null
+      let balance: { available: Stripe.Balance.Available[]; pending: Stripe.Balance.Pending[] } | null = null
       try {
         const accountBalance = await stripe.balance.retrieve({
           stripeAccount: collaborator.stripe_account_id,
