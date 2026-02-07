@@ -46,6 +46,17 @@ app.use(cors({
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 
+// Ensure database is connected before handling API routes (fixes serverless buffering timeout)
+app.use('/api', async (req, res, next) => {
+  try {
+    await connectDatabase()
+    next()
+  } catch (err) {
+    console.error('DB connection failed before request:', err)
+    res.status(503).json({ success: false, message: 'Service temporarily unavailable. Please try again.' })
+  }
+})
+
 // Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', message: 'Server is running' })

@@ -4,7 +4,8 @@ import mongoose from 'mongoose'
 const MONGODB_URI =
   'mongodb+srv://ali:ali@cluster0.o8bu9nt.mongodb.net/client-project-portal'
 
-
+// Increase buffer timeout so cold-start connections don't fail (default 10s -> 30s)
+mongoose.set('bufferTimeoutMS', 30000)
 
 // Cache the connection to reuse in serverless environments
 let cachedConnection: typeof mongoose | null = null
@@ -16,11 +17,11 @@ export const connectDatabase = async () => {
   }
 
   try {
-    // Set connection options for serverless
+    // Set connection options for serverless (longer timeouts to avoid buffering timeout on cold start)
     const options = {
-      maxPoolSize: 10, // Maintain up to 10 socket connections
-      serverSelectionTimeoutMS: 5000, // Keep trying to send operations for 5 seconds
-      socketTimeoutMS: 45000, // Close sockets after 45 seconds of inactivity
+      maxPoolSize: 10,
+      serverSelectionTimeoutMS: 15000, // Wait up to 15s for server selection
+      socketTimeoutMS: 45000,
     }
 
     cachedConnection = await mongoose.connect(MONGODB_URI, options)
