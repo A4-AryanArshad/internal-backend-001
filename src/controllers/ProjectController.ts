@@ -183,10 +183,20 @@ export class ProjectController {
     }
   }
 
-  // Get all simple (predefined) projects for the catalog – show all so users can see and choose
+  // Get all predefined (simple) projects for the catalog – same filter as admin "Simple Project (Predefined Services)"
+  // Include: project_type === 'simple' OR projects that look like predefined packages (service_name + service_price)
   static async getSimpleProjects(req: Request, res: Response) {
     try {
-      const projects = await Project.find({ project_type: 'simple' })
+      const projects = await Project.find({
+        $or: [
+          { project_type: 'simple' },
+          {
+            project_type: { $ne: 'custom' },
+            service_name: { $exists: true, $ne: '' },
+            service_price: { $exists: true, $gt: 0 },
+          },
+        ],
+      })
         .populate('selected_service')
         .sort({ created_at: -1 })
 
