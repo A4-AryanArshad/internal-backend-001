@@ -16,6 +16,7 @@ import briefingRoutes from './routes/briefingRoutes'
 import uploadRoutes from './routes/uploadRoutes'
 import customQuoteRoutes from './routes/customQuoteRoutes'
 import collaboratorRoutes from './routes/collaboratorRoutes'
+import notificationRoutes from './routes/notificationRoutes'
 
 const app = express()
 const PORT = 3001
@@ -71,6 +72,7 @@ app.use('/api/briefings', briefingRoutes)
 app.use('/api/upload', uploadRoutes)
 app.use('/api/custom-quotes', customQuoteRoutes)
 app.use('/api/collaborators', collaboratorRoutes)
+app.use('/api/notifications', notificationRoutes)
 
 // Error handling
 app.use(errorHandler)
