@@ -1,6 +1,7 @@
 import { Request, Response } from 'express'
 import { Project } from '../models/Project'
 import { ApiResponse } from '../views/response'
+import { AuthRequest } from '../middleware/auth'
 
 export class ProjectController {
   // Get project by ID (for client link validation)
@@ -182,10 +183,17 @@ export class ProjectController {
     }
   }
 
-  // Get all simple projects (public, no auth required)
+  // Get all simple projects (catalog only: templates with no client, so each package appears once)
   static async getSimpleProjects(req: Request, res: Response) {
     try {
-      const projects = await Project.find({ project_type: 'simple' })
+      const projects = await Project.find({
+        project_type: 'simple',
+        $or: [
+          { client_email: { $exists: false } },
+          { client_email: null },
+          { client_email: '' },
+        ],
+      })
         .populate('selected_service')
         .sort({ created_at: -1 })
 
@@ -218,6 +226,132 @@ export class ProjectController {
     } catch (error: any) {
       return ApiResponse.error(res, error.message, 500)
     }
+  }
+
+  // Duplicate a project for the current user (so each purchase gets its own project row in admin)
+  static async duplicateForCurrentUser(req: Request, res: Response) {
+    try {
+      const { projectId } = req.params
+      const authReq = req as AuthRequest
+      const userEmail = authReq.user?.email
+      const userId = authReq.user?.userId
+
+      if (!userEmail) {
+        return ApiResponse.error(res, 'User not authenticated', 401)
+      }
+
+      const project = await Project.findById(projectId)
+      if (!project) {
+        return ApiResponse.notFound(res, 'Project not found')
+      }
+
+      const isOwn =
+        (project.client_email && project.client_email.toLowerCase() === userEmail.toLowerCase()) ||
+        (userId && project.client_user && String(project.client_user) === String(userId))
+      if (isOwn) {
+        return ApiResponse.error(res, 'This is already your project', 400)
+      }
+
+      const doc = project.toObject()
+      delete (doc as any)._id
+      delete (doc as any).created_at
+      delete (doc as any).updated_at
+      delete (doc as any).client_email
+      delete (doc as any).client_user
+      delete (doc as any).payment_status
+      delete (doc as any).stripe_payment_id
+      delete (doc as any).assigned_collaborator
+      delete (doc as any).invoice_url
+      delete (doc as any).invoice_public_id
+      delete (doc as any).invoice_status
+      delete (doc as any).invoice_uploaded_at
+      delete (doc as any).invoice_approved_at
+      delete (doc as any).invoice_type
+      delete (doc as any).monthly_invoice_id
+      delete (doc as any).monthly_invoice_month
+      delete (doc as any).collaborator_paid
+      delete (doc as any).collaborator_paid_at
+      delete (doc as any).collaborator_transfer_id
+      delete (doc as any).revisions_used
+      delete (doc as any).completed_at
+
+      const newProject = await Project.create({
+        ...doc,
+        client_name: 'Client',
+        client_email: userEmail,
+        client_user: userId || undefined,
+        payment_status: 'pending',
+      })
+
+      return ApiResponse.success(res, { newProjectId: newProject._id }, 'Project duplicated for you', 201)
+    } catch (error: any) {
+      return ApiResponse.error(res, error.message, 500)
+    }
+  }
+
+  /** Create a duplicate project for a user (for checkout). Optionally copy briefing + images to the new project. Returns the new project. */
+  static async createDuplicateForCheckout(
+    sourceProjectId: string,
+    userEmail: string,
+    userId: string | undefined,
+    copyBriefingAndImages: boolean
+  ): Promise<InstanceType<typeof Project> | null> {
+    const project = await Project.findById(sourceProjectId)
+    if (!project) return null
+
+    const doc = project.toObject() as any
+    delete doc._id
+    delete doc.created_at
+    delete doc.updated_at
+    delete doc.client_email
+    delete doc.client_user
+    delete doc.payment_status
+    delete doc.stripe_payment_id
+    delete doc.assigned_collaborator
+    delete doc.invoice_url
+    delete doc.invoice_public_id
+    delete doc.invoice_status
+    delete doc.invoice_uploaded_at
+    delete doc.invoice_approved_at
+    delete doc.invoice_type
+    delete doc.monthly_invoice_id
+    delete doc.monthly_invoice_month
+    delete doc.collaborator_paid
+    delete doc.collaborator_paid_at
+    delete doc.collaborator_transfer_id
+    delete doc.revisions_used
+    delete doc.completed_at
+
+    const newProject = await Project.create({
+      ...doc,
+      client_name: 'Client',
+      client_email: userEmail,
+      client_user: userId,
+      payment_status: 'pending',
+    })
+
+    if (copyBriefingAndImages) {
+      const { ProjectBriefing, BriefingImage } = await import('../models/Briefing')
+      const briefing = await ProjectBriefing.findOne({ project_id: sourceProjectId })
+      if (briefing) {
+        await ProjectBriefing.create({
+          project_id: newProject._id,
+          overall_description: briefing.overall_description,
+          submitted_at: briefing.submitted_at,
+        })
+      }
+      const images = await BriefingImage.find({ project_id: sourceProjectId }).sort({ order: 1 })
+      for (let i = 0; i < images.length; i++) {
+        await BriefingImage.create({
+          project_id: newProject._id,
+          image_url: images[i].image_url,
+          notes: images[i].notes,
+          order: images[i].order ?? i,
+        })
+      }
+    }
+
+    return newProject
   }
 
   // Update project status

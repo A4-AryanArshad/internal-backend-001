@@ -24,6 +24,9 @@ router.get('/client/:email', ProjectController.getClientProjects)
 router.get('/invoices/accepted-overview', authenticate, ProjectController.getAcceptedInvoicesOverview)
 router.get('/invoices/monthly', authenticate, ProjectController.getMonthlyInvoices)
 
+// Duplicate project for current user (when opening someone else's project - get your own copy)
+router.post('/:projectId/duplicate-for-current-user', validateProjectId, authenticate, ProjectController.duplicateForCurrentUser)
+
 // Get project by ID (for client link validation)
 router.get('/:projectId', validateProjectId, ProjectController.getProject)
 
