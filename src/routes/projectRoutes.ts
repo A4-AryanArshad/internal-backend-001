@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { ProjectController } from '../controllers/ProjectController'
 import { validateProjectId, validateServiceSelection } from '../middleware/validation'
-import { authenticate } from '../middleware/auth'
+import { authenticate, optionalAuth } from '../middleware/auth'
 
 const router = Router()
 
@@ -20,18 +20,11 @@ router.get('/my-projects', authenticate, ProjectController.getMyProjects)
 // Get all projects for a client (by email) - for admin use
 router.get('/client/:email', ProjectController.getClientProjects)
 
-// Invoice routes - must be before :projectId
-router.get('/invoices/accepted-overview', authenticate, ProjectController.getAcceptedInvoicesOverview)
-router.get('/invoices/monthly', authenticate, ProjectController.getMonthlyInvoices)
+// Get project by ID (optionalAuth so we can enforce client ownership when logged in)
+router.get('/:projectId', validateProjectId, optionalAuth, ProjectController.getProject)
 
-// Duplicate project for current user (when opening someone else's project - get your own copy)
-router.post('/:projectId/duplicate-for-current-user', validateProjectId, authenticate, ProjectController.duplicateForCurrentUser)
-
-// Get project by ID (for client link validation)
-router.get('/:projectId', validateProjectId, ProjectController.getProject)
-
-// Get project with full details
-router.get('/:projectId/details', validateProjectId, ProjectController.getProjectDetails)
+// Get project with full details (optionalAuth for client ownership check)
+router.get('/:projectId/details', validateProjectId, optionalAuth, ProjectController.getProjectDetails)
 
 // Update service selection
 router.post('/:projectId/service', validateProjectId, validateServiceSelection, ProjectController.updateServiceSelection)
@@ -53,6 +46,9 @@ router.post('/:projectId/invoice/approve', validateProjectId, authenticate, Proj
 
 // Reject invoice (admin)
 router.post('/:projectId/invoice/reject', validateProjectId, authenticate, ProjectController.rejectInvoice)
+
+// Get all monthly invoices (admin)
+router.get('/invoices/monthly', authenticate, ProjectController.getMonthlyInvoices)
 
 export default router
 

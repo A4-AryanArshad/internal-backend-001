@@ -5,7 +5,6 @@ import { getStripe } from '../config/stripe'
 import { ApiResponse } from '../views/response'
 import { AuthRequest } from '../middleware/auth'
 import { Collaborator } from '../models/Collaborator'
-import { ProjectController } from './ProjectController'
 
 export class PaymentController {
   // Create Stripe checkout session
@@ -13,43 +12,12 @@ export class PaymentController {
     try {
       const { projectId } = req.params
       const { serviceId, customAmount } = req.body
-      const authReq = req as AuthRequest
-      const userEmail = authReq.user?.email
-      const userId = authReq.user?.userId
 
       // Verify project exists
-      let project = await Project.findById(projectId)
+      const project = await Project.findById(projectId)
 
       if (!project) {
         return ApiResponse.notFound(res, 'Project not found')
-      }
-
-      let effectiveProjectId = projectId
-
-      // For simple (catalog) projects: always create a new project per purchase so admin sees each purchase separately
-      if (project.project_type === 'simple' && userEmail) {
-        const duplicate = await ProjectController.createDuplicateForCheckout(
-          projectId,
-          userEmail,
-          userId,
-          true // copy briefing and images so we don't lose what they already submitted
-        )
-        if (duplicate) {
-          project = duplicate
-          effectiveProjectId = duplicate._id.toString()
-        }
-      } else {
-        // Non-simple or no auth: link existing project to current user if not already set
-        const updateData: any = {}
-        if (userEmail && !project.client_email) {
-          updateData.client_email = userEmail
-        }
-        if (userId && !project.client_user) {
-          updateData.client_user = userId
-        }
-        if (Object.keys(updateData).length > 0) {
-          await Project.findByIdAndUpdate(projectId, updateData)
-        }
       }
 
       // Determine amount
@@ -68,9 +36,6 @@ export class PaymentController {
       } else if (customAmount) {
         amount = customAmount
         description = 'Custom Quote'
-      } else if (project.service_price != null && project.service_price > 0) {
-        amount = project.service_price
-        description = project.service_name || project.name || 'Project'
       } else {
         return ApiResponse.error(res, 'No service or amount specified', 400)
       }
@@ -96,12 +61,12 @@ export class PaymentController {
           },
         ],
         mode: 'payment',
-        customer_email: project.client_email || userEmail || undefined, // Pre-fill email if available
+        customer_email: project.client_email || undefined, // Pre-fill email if available
         billing_address_collection: 'required', // Collect billing address (includes email)
-        success_url: `${FRONTEND_URL}/client/${effectiveProjectId}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${FRONTEND_URL}/client/${effectiveProjectId}/payment?payment=cancelled`,
+        success_url: `${FRONTEND_URL}/client/${projectId}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${FRONTEND_URL}/client/${projectId}/payment?payment=cancelled`,
         metadata: {
-          projectId: effectiveProjectId,
+          projectId: projectId,
           serviceId: serviceId || '',
           customAmount: customAmount?.toString() || '',
         },

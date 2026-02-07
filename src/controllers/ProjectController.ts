@@ -8,11 +8,20 @@ export class ProjectController {
   static async getProject(req: Request, res: Response) {
     try {
       const { projectId } = req.params
-
       const project = await Project.findById(projectId)
 
       if (!project) {
         return ApiResponse.notFound(res, 'Project not found or invalid link')
+      }
+
+      // Client role: only allow access to projects they own (client_email matches)
+      const authReq = req as AuthRequest
+      if (authReq.user?.role === 'client') {
+        const projectEmail = (project.client_email || '').toLowerCase()
+        const userEmail = (authReq.user.email || '').toLowerCase()
+        if (projectEmail && projectEmail !== userEmail) {
+          return ApiResponse.error(res, 'You do not have access to this project', 403)
+        }
       }
 
       return ApiResponse.success(res, project, 'Project retrieved successfully')
@@ -60,7 +69,6 @@ export class ProjectController {
     try {
       const { projectId } = req.params
 
-      // Get project with populated service, collaborator, and custom quote request
       const project = await Project.findById(projectId)
         .populate('selected_service')
         .populate('assigned_collaborator', 'first_name last_name')
@@ -68,6 +76,16 @@ export class ProjectController {
 
       if (!project) {
         return ApiResponse.notFound(res, 'Project not found')
+      }
+
+      // Client role: only allow access to projects they own (client_email matches)
+      const authReq = req as AuthRequest
+      if (authReq.user?.role === 'client') {
+        const projectEmail = (project.client_email || '').toLowerCase()
+        const userEmail = (authReq.user.email || '').toLowerCase()
+        if (projectEmail && projectEmail !== userEmail) {
+          return ApiResponse.error(res, 'You do not have access to this project', 403)
+        }
       }
 
       // Get briefing
@@ -183,20 +201,10 @@ export class ProjectController {
     }
   }
 
-  // Get all predefined (simple) projects for the catalog – same filter as admin "Simple Project (Predefined Services)"
-  // Include: project_type === 'simple' OR projects that look like predefined packages (service_name + service_price)
+  // Get all simple projects (public, no auth required)
   static async getSimpleProjects(req: Request, res: Response) {
     try {
-      const projects = await Project.find({
-        $or: [
-          { project_type: 'simple' },
-          {
-            project_type: { $ne: 'custom' },
-            service_name: { $exists: true, $ne: '' },
-            service_price: { $exists: true, $gt: 0 },
-          },
-        ],
-      })
+      const projects = await Project.find({ project_type: 'simple' })
         .populate('selected_service')
         .sort({ created_at: -1 })
 
@@ -206,22 +214,16 @@ export class ProjectController {
     }
   }
 
-  // Get all projects for authenticated client (uses JWT token) – paid and unpaid
+  // Get all projects for authenticated client (uses JWT token)
   static async getMyProjects(req: Request, res: Response) {
     try {
       const userEmail = (req as any).user?.email
-      const userId = (req as any).user?.userId
 
       if (!userEmail) {
         return ApiResponse.error(res, 'User not authenticated', 401)
       }
 
-      const query: any = { $or: [{ client_email: userEmail }] }
-      if (userId) {
-        query.$or.push({ client_user: userId })
-      }
-
-      const projects = await Project.find(query)
+      const projects = await Project.find({ client_email: userEmail })
         .populate('selected_service')
         .sort({ created_at: -1 })
 
@@ -229,132 +231,6 @@ export class ProjectController {
     } catch (error: any) {
       return ApiResponse.error(res, error.message, 500)
     }
-  }
-
-  // Duplicate a project for the current user (so each purchase gets its own project row in admin)
-  static async duplicateForCurrentUser(req: Request, res: Response) {
-    try {
-      const { projectId } = req.params
-      const authReq = req as AuthRequest
-      const userEmail = authReq.user?.email
-      const userId = authReq.user?.userId
-
-      if (!userEmail) {
-        return ApiResponse.error(res, 'User not authenticated', 401)
-      }
-
-      const project = await Project.findById(projectId)
-      if (!project) {
-        return ApiResponse.notFound(res, 'Project not found')
-      }
-
-      const isOwn =
-        (project.client_email && project.client_email.toLowerCase() === userEmail.toLowerCase()) ||
-        (userId && project.client_user && String(project.client_user) === String(userId))
-      if (isOwn) {
-        return ApiResponse.error(res, 'This is already your project', 400)
-      }
-
-      const doc = project.toObject()
-      delete (doc as any)._id
-      delete (doc as any).created_at
-      delete (doc as any).updated_at
-      delete (doc as any).client_email
-      delete (doc as any).client_user
-      delete (doc as any).payment_status
-      delete (doc as any).stripe_payment_id
-      delete (doc as any).assigned_collaborator
-      delete (doc as any).invoice_url
-      delete (doc as any).invoice_public_id
-      delete (doc as any).invoice_status
-      delete (doc as any).invoice_uploaded_at
-      delete (doc as any).invoice_approved_at
-      delete (doc as any).invoice_type
-      delete (doc as any).monthly_invoice_id
-      delete (doc as any).monthly_invoice_month
-      delete (doc as any).collaborator_paid
-      delete (doc as any).collaborator_paid_at
-      delete (doc as any).collaborator_transfer_id
-      delete (doc as any).revisions_used
-      delete (doc as any).completed_at
-
-      const newProject = await Project.create({
-        ...doc,
-        client_name: 'Client',
-        client_email: userEmail,
-        client_user: userId || undefined,
-        payment_status: 'pending',
-      })
-
-      return ApiResponse.success(res, { newProjectId: newProject._id }, 'Project duplicated for you', 201)
-    } catch (error: any) {
-      return ApiResponse.error(res, error.message, 500)
-    }
-  }
-
-  /** Create a duplicate project for a user (for checkout). Optionally copy briefing + images to the new project. Returns the new project. */
-  static async createDuplicateForCheckout(
-    sourceProjectId: string,
-    userEmail: string,
-    userId: string | undefined,
-    copyBriefingAndImages: boolean
-  ): Promise<InstanceType<typeof Project> | null> {
-    const project = await Project.findById(sourceProjectId)
-    if (!project) return null
-
-    const doc = project.toObject() as any
-    delete doc._id
-    delete doc.created_at
-    delete doc.updated_at
-    delete doc.client_email
-    delete doc.client_user
-    delete doc.payment_status
-    delete doc.stripe_payment_id
-    delete doc.assigned_collaborator
-    delete doc.invoice_url
-    delete doc.invoice_public_id
-    delete doc.invoice_status
-    delete doc.invoice_uploaded_at
-    delete doc.invoice_approved_at
-    delete doc.invoice_type
-    delete doc.monthly_invoice_id
-    delete doc.monthly_invoice_month
-    delete doc.collaborator_paid
-    delete doc.collaborator_paid_at
-    delete doc.collaborator_transfer_id
-    delete doc.revisions_used
-    delete doc.completed_at
-
-    const newProject = await Project.create({
-      ...doc,
-      client_name: 'Client',
-      client_email: userEmail,
-      client_user: userId,
-      payment_status: 'pending',
-    })
-
-    if (copyBriefingAndImages) {
-      const { ProjectBriefing, BriefingImage } = await import('../models/Briefing')
-      const briefing = await ProjectBriefing.findOne({ project_id: sourceProjectId })
-      if (briefing) {
-        await ProjectBriefing.create({
-          project_id: newProject._id,
-          overall_description: briefing.overall_description,
-          submitted_at: briefing.submitted_at,
-        })
-      }
-      const images = await BriefingImage.find({ project_id: sourceProjectId }).sort({ order: 1 })
-      for (let i = 0; i < images.length; i++) {
-        await BriefingImage.create({
-          project_id: newProject._id,
-          image_url: images[i].image_url,
-          notes: images[i].notes,
-          order: images[i].order ?? i,
-        })
-      }
-    }
-
-    return newProject
   }
 
   // Update project status
@@ -510,7 +386,7 @@ export class ProjectController {
     }
   }
 
-  // Assign collaborator (only after client has paid)
+  // Assign collaborator
   static async assignCollaborator(req: Request, res: Response) {
     try {
       const { projectId } = req.params
@@ -522,19 +398,6 @@ export class ProjectController {
 
       if (!payment_amount || payment_amount <= 0) {
         return ApiResponse.error(res, 'Payment amount is required and must be greater than 0', 400)
-      }
-
-      // Require client payment before assigning a collaborator
-      const existingProject = await Project.findById(projectId)
-      if (!existingProject) {
-        return ApiResponse.notFound(res, 'Project not found')
-      }
-      if (existingProject.payment_status !== 'paid') {
-        return ApiResponse.error(
-          res,
-          'Client must complete payment before you can assign a collaborator.',
-          400
-        )
       }
 
       // Verify collaborator exists
@@ -702,144 +565,4 @@ export class ProjectController {
     }
   }
 
-  // Get all accepted (approved) invoices + amount paid per invoice + amount left to pay per collaborator (admin)
-  static async getAcceptedInvoicesOverview(req: Request, res: Response) {
-    try {
-      const { Collaborator } = await import('../models/Collaborator')
-
-      const approvedProjects = await Project.find({
-        invoice_status: 'approved',
-        invoice_url: { $exists: true, $ne: null },
-        assigned_collaborator: { $exists: true, $ne: null },
-      })
-        .populate('assigned_collaborator', 'first_name last_name')
-        .sort({ invoice_approved_at: -1 })
-
-      const invoiceRows: Array<{
-        id: string
-        type: 'per-project' | 'monthly'
-        label: string
-        collaboratorId: string
-        collaboratorName: string
-        amount: number
-        paid: boolean
-        paidAt?: string
-        projectId?: string
-        monthlyInvoiceId?: string
-        month?: string
-      }> = []
-
-      const monthlySeen = new Set<string>()
-
-      for (const p of approvedProjects) {
-        const collab = p.assigned_collaborator as any
-        const collaboratorId = collab?._id?.toString() || ''
-        const collaboratorName = collab
-          ? `${collab.first_name || ''} ${collab.last_name || ''}`.trim() || 'Unknown'
-          : 'Unknown'
-        const amount = p.collaborator_payment_amount || 0
-        const paid = !!p.collaborator_paid
-        const paidAt = p.collaborator_paid_at
-          ? new Date(p.collaborator_paid_at).toISOString()
-          : undefined
-
-        if (p.invoice_type === 'monthly' && p.monthly_invoice_id) {
-          if (!monthlySeen.has(p.monthly_invoice_id)) {
-            monthlySeen.add(p.monthly_invoice_id)
-            const group = approvedProjects.filter(
-              (x: any) => x.monthly_invoice_id === p.monthly_invoice_id
-            )
-            const totalAmount = group.reduce(
-              (sum: number, x: any) => sum + (x.collaborator_payment_amount || 0),
-              0
-            )
-            const allPaid = group.every((x: any) => x.collaborator_paid)
-            const firstPaidAt = group.find((x: any) => x.collaborator_paid_at)
-              ?.collaborator_paid_at
-            const monthLabel = p.monthly_invoice_month
-              ? new Date(p.monthly_invoice_month + '-01').toLocaleDateString('en-US', {
-                  month: 'long',
-                  year: 'numeric',
-                })
-              : 'Monthly'
-            invoiceRows.push({
-              id: p.monthly_invoice_id,
-              type: 'monthly',
-              label: `${monthLabel} – Monthly Invoice`,
-              collaboratorId,
-              collaboratorName,
-              amount: totalAmount,
-              paid: allPaid,
-              paidAt: firstPaidAt
-                ? new Date(firstPaidAt).toISOString()
-                : undefined,
-              monthlyInvoiceId: p.monthly_invoice_id,
-              month: p.monthly_invoice_month,
-            })
-          }
-        } else {
-          invoiceRows.push({
-            id: (p._id as any).toString(),
-            type: 'per-project',
-            label: p.name,
-            collaboratorId,
-            collaboratorName,
-            amount,
-            paid,
-            paidAt,
-            projectId: (p._id as any).toString(),
-          })
-        }
-      }
-
-      const collaborators = await Collaborator.find().sort({ first_name: 1, last_name: 1 })
-      const byCollaborator: Array<{
-        collaboratorId: string
-        collaboratorName: string
-        totalPaid: number
-        totalLeftToPay: number
-      }> = []
-
-      for (const c of collaborators) {
-        const cid = (c._id as any).toString()
-        const paidProjects = approvedProjects.filter(
-          (p: any) =>
-            (p.assigned_collaborator?._id?.toString() || p.assigned_collaborator?.toString()) ===
-              cid && p.collaborator_paid
-        )
-        const unpaidProjects = approvedProjects.filter(
-          (p: any) =>
-            (p.assigned_collaborator?._id?.toString() || p.assigned_collaborator?.toString()) ===
-              cid && !p.collaborator_paid
-        )
-        const totalPaid = paidProjects.reduce(
-          (sum: number, p: any) => sum + (p.collaborator_payment_amount || 0),
-          0
-        )
-        const totalLeftToPay = unpaidProjects.reduce(
-          (sum: number, p: any) => sum + (p.collaborator_payment_amount || 0),
-          0
-        )
-        if (totalPaid > 0 || totalLeftToPay > 0) {
-          byCollaborator.push({
-            collaboratorId: cid,
-            collaboratorName: `${c.first_name} ${c.last_name}`,
-            totalPaid,
-            totalLeftToPay,
-          })
-        }
-      }
-
-      return ApiResponse.success(
-        res,
-        {
-          acceptedInvoices: invoiceRows,
-          byCollaborator,
-        },
-        'Accepted invoices overview retrieved successfully'
-      )
-    } catch (error: any) {
-      return ApiResponse.error(res, error.message, 500)
-    }
-  }
 }
