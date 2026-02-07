@@ -218,6 +218,40 @@ export class ProjectController {
     }
   }
 
+  // Create a new project for the current user when they choose a service (like Fiverr: each purchase is a new order; multiple users can buy the same service)
+  static async startFromCatalog(req: Request, res: Response) {
+    try {
+      const authReq = req as AuthRequest
+      if (authReq.user?.role !== 'client') {
+        return ApiResponse.error(res, 'Only clients can start a project from the catalog', 403)
+      }
+      const { projectId } = req.body
+      if (!projectId) {
+        return ApiResponse.error(res, 'projectId is required', 400)
+      }
+      const template = await Project.findById(projectId)
+      if (!template || template.project_type !== 'simple') {
+        return ApiResponse.error(res, 'Project not found or not a catalog project', 404)
+      }
+      const userEmail = (authReq.user.email || '').trim()
+      const newProject = await Project.create({
+        name: template.name,
+        client_name: authReq.user.name || 'Client',
+        client_email: userEmail,
+        project_type: 'simple',
+        service_name: template.service_name,
+        service_price: template.service_price,
+        delivery_timeline: template.delivery_timeline || '30 days',
+        status: 'pending',
+        payment_status: 'pending',
+      })
+      const populated = await Project.findById(newProject._id).populate('selected_service')
+      return ApiResponse.success(res, populated || newProject, 'Project created for you', 201)
+    } catch (error: any) {
+      return ApiResponse.error(res, error.message, 500)
+    }
+  }
+
   // Get all projects for authenticated client (uses JWT token)
   static async getMyProjects(req: Request, res: Response) {
     try {

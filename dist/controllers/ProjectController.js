@@ -45,12 +45,14 @@ class ProjectController {
             if (!project) {
                 return response_1.ApiResponse.notFound(res, 'Project not found or invalid link');
             }
-            // Client role: only allow access to projects they own (client_email matches)
+            // Client role: allow access if they own the project OR project is unclaimed/unpaid (so they can start purchase flow)
             const authReq = req;
             if (authReq.user?.role === 'client') {
                 const projectEmail = (project.client_email || '').toLowerCase();
                 const userEmail = (authReq.user.email || '').toLowerCase();
-                if (projectEmail && projectEmail !== userEmail) {
+                const isOwner = projectEmail && projectEmail === userEmail;
+                const isUnclaimedOrUnpaid = !projectEmail || project.payment_status !== 'paid';
+                if (!isOwner && !isUnclaimedOrUnpaid) {
                     return response_1.ApiResponse.error(res, 'You do not have access to this project', 403);
                 }
             }
@@ -96,12 +98,14 @@ class ProjectController {
             if (!project) {
                 return response_1.ApiResponse.notFound(res, 'Project not found');
             }
-            // Client role: only allow access to projects they own (client_email matches)
+            // Client role: allow access if they own the project OR project is unclaimed/unpaid (so they can start purchase flow)
             const authReq = req;
             if (authReq.user?.role === 'client') {
                 const projectEmail = (project.client_email || '').toLowerCase();
                 const userEmail = (authReq.user.email || '').toLowerCase();
-                if (projectEmail && projectEmail !== userEmail) {
+                const isOwner = projectEmail && projectEmail === userEmail;
+                const isUnclaimedOrUnpaid = !projectEmail || project.payment_status !== 'paid';
+                if (!isOwner && !isUnclaimedOrUnpaid) {
                     return response_1.ApiResponse.error(res, 'You do not have access to this project', 403);
                 }
             }
@@ -212,6 +216,53 @@ class ProjectController {
                 .populate('selected_service')
                 .sort({ created_at: -1 });
             return response_1.ApiResponse.success(res, projects, 'Simple projects retrieved successfully');
+        }
+        catch (error) {
+            return response_1.ApiResponse.error(res, error.message, 500);
+        }
+    }
+    // Get or create an unclaimed project so a client can submit requirements and pay (when the catalog project they clicked is already taken)
+    static async startFromCatalog(req, res) {
+        try {
+            const authReq = req;
+            if (authReq.user?.role !== 'client') {
+                return response_1.ApiResponse.error(res, 'Only clients can start a project from the catalog', 403);
+            }
+            const { projectId } = req.body;
+            if (!projectId) {
+                return response_1.ApiResponse.error(res, 'projectId is required', 400);
+            }
+            const template = await Project_1.Project.findById(projectId);
+            if (!template || template.project_type !== 'simple') {
+                return response_1.ApiResponse.error(res, 'Project not found or not a catalog project', 404);
+            }
+            const name = template.name;
+            const servicePrice = template.service_price;
+            const unclaimed = await Project_1.Project.findOne({
+                project_type: 'simple',
+                name,
+                service_price: servicePrice,
+                $or: [
+                    { client_email: { $in: [null, ''] } },
+                    { payment_status: { $ne: 'paid' } },
+                ],
+            })
+                .populate('selected_service');
+            if (unclaimed) {
+                return response_1.ApiResponse.success(res, unclaimed, 'Unclaimed project found');
+            }
+            const newProject = await Project_1.Project.create({
+                name,
+                client_name: 'Client',
+                project_type: 'simple',
+                service_name: template.service_name,
+                service_price: servicePrice,
+                delivery_timeline: template.delivery_timeline || '30 days',
+                status: 'pending',
+                payment_status: 'pending',
+            });
+            const populated = await Project_1.Project.findById(newProject._id).populate('selected_service');
+            return response_1.ApiResponse.success(res, populated || newProject, 'Project created for you to complete', 201);
         }
         catch (error) {
             return response_1.ApiResponse.error(res, error.message, 500);

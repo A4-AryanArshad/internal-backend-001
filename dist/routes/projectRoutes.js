@@ -15,6 +15,8 @@ router.get('/simple', ProjectController_1.ProjectController.getSimpleProjects);
 router.get('/my-projects', auth_1.authenticate, ProjectController_1.ProjectController.getMyProjects);
 // Get all projects for a client (by email) - for admin use
 router.get('/client/:email', ProjectController_1.ProjectController.getClientProjects);
+// Get or create an unclaimed project so client can submit requirements and pay (when catalog project is already taken)
+router.post('/start-from-catalog', auth_1.authenticate, ProjectController_1.ProjectController.startFromCatalog);
 // Get project by ID (optionalAuth so we can enforce client ownership when logged in)
 router.get('/:projectId', validation_1.validateProjectId, auth_1.optionalAuth, ProjectController_1.ProjectController.getProject);
 // Get project with full details (optionalAuth for client ownership check)
