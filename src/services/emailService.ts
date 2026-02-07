@@ -133,3 +133,88 @@ export const sendClientDashboardEmail = async (
   }
 }
 
+/** Notify admin(s) that a collaborator uploaded an invoice (per-project or monthly). */
+export const sendAdminInvoiceUploadedEmail = async (
+  adminEmails: string[],
+  options: {
+    projectName?: string
+    projectId?: string
+    collaboratorName?: string
+    kind: 'per-project' | 'monthly'
+    month?: string
+    projectsCount?: number
+  }
+) => {
+  if (!adminEmails.length) return { success: false, error: 'No admin emails' }
+
+  const LOCAL_FRONTEND = 'http://localhost:5173'
+  const DEPLOYED_FRONTEND = 'https://internal-frontend-two.vercel.app'
+  const FRONTEND_URL = process.env.VERCEL === '1' ? DEPLOYED_FRONTEND : LOCAL_FRONTEND
+  const adminProjectsUrl = `${FRONTEND_URL}/admin/projects`
+  const projectDetailUrl = options.projectId ? `${FRONTEND_URL}/admin/projects/${options.projectId}` : adminProjectsUrl
+
+  const isMonthly = options.kind === 'monthly'
+  const subject = isMonthly
+    ? `Monthly invoice uploaded for ${options.month || 'N/A'} (${options.projectsCount || 0} project(s))`
+    : `Invoice uploaded: ${options.projectName || 'Project'}`
+
+  const bodyHtml = isMonthly
+    ? `
+      <p>A collaborator${options.collaboratorName ? ` (${options.collaboratorName})` : ''} has uploaded a <strong>monthly invoice</strong> for <strong>${options.month || 'N/A'}</strong> covering <strong>${options.projectsCount ?? 0} project(s)</strong>.</p>
+      <p>Please review and approve or reject from the admin dashboard.</p>
+      <div class="btn-wrap"><a href="${adminProjectsUrl}" style="display: inline-block; padding: 14px 28px; background-color: #1d4ed8; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600;">View Admin Dashboard</a></div>
+    `
+    : `
+      <p>A collaborator${options.collaboratorName ? ` (${options.collaboratorName})` : ''} has uploaded an <strong>invoice</strong> for project: <strong>${options.projectName || 'Project'}</strong>.</p>
+      <p>Please review and approve or reject from the project page.</p>
+      <div class="btn-wrap"><a href="${projectDetailUrl}" style="display: inline-block; padding: 14px 28px; background-color: #1d4ed8; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600;">View Project</a></div>
+    `
+
+  const transporter = createTransporter()
+  const mailOptions = {
+    from: `"Client Project Portal" <${GMAIL_USER}>`,
+    to: adminEmails.join(', '),
+    subject: `[Admin] ${subject}`,
+    html: `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #1f2937; margin: 0; padding: 0; background: #f3f4f6; }
+            .container { max-width: 560px; margin: 0 auto; padding: 24px; }
+            .card { background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+            .header { background: #1d4ed8; padding: 24px 20px; text-align: center; }
+            .header h1 { margin: 0; font-size: 1.25rem; font-weight: 700; color: #ffffff; }
+            .content { padding: 28px 24px; }
+            .content p { margin: 0 0 1rem; font-size: 15px; }
+            .btn-wrap { text-align: center; margin: 24px 0; }
+            .footer { text-align: center; padding: 20px; color: #9ca3af; font-size: 12px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="card">
+              <div class="header"><h1>Invoice uploaded</h1></div>
+              <div class="content">${bodyHtml}</div>
+            </div>
+            <div class="footer"><p>This is an automated admin notification.</p></div>
+          </div>
+        </body>
+      </html>
+    `,
+    text: isMonthly
+      ? `A collaborator has uploaded a monthly invoice for ${options.month} (${options.projectsCount} project(s)). View: ${adminProjectsUrl}`
+      : `An invoice was uploaded for project "${options.projectName}". View: ${projectDetailUrl}`,
+  }
+
+  try {
+    const result = await transporter.sendMail(mailOptions)
+    console.log('✅ Admin invoice notification sent to', adminEmails.join(', '))
+    return { success: true, messageId: result.messageId }
+  } catch (error: any) {
+    console.error('❌ Admin invoice notification failed:', error.message)
+    return { success: false, error: error.message }
+  }
+}
+

@@ -1,10 +1,13 @@
 import { Request, Response } from 'express'
 import { Project } from '../models/Project'
 import { Collaborator } from '../models/Collaborator'
+import { User } from '../models/User'
 import { ApiResponse } from '../views/response'
 import cloudinary from '../config/cloudinary'
 import { Readable } from 'stream'
 import { AuthRequest } from '../middleware/auth'
+import { sendAdminInvoiceUploadedEmail } from '../services/emailService'
+import { Notification } from '../models/Notification'
 
 export class UploadController {
   // Upload image to Cloudinary
@@ -94,7 +97,7 @@ export class UploadController {
       const file = req.file
 
       // Verify project exists and is assigned to a collaborator
-      const project = await Project.findById(projectId)
+      const project = await Project.findById(projectId).populate('assigned_collaborator', 'first_name last_name')
 
       if (!project) {
         return ApiResponse.notFound(res, 'Project not found')
@@ -144,6 +147,43 @@ export class UploadController {
               invoice_type: 'per-project',
               updated_at: new Date(),
             })
+
+            // Create in-app notifications for each admin (fire-and-forget)
+            const collab = project.assigned_collaborator as any
+            const collaboratorName = collab?.first_name || collab?.last_name
+              ? [collab.first_name, collab.last_name].filter(Boolean).join(' ')
+              : undefined
+            User.find({ role: 'admin' })
+              .then((admins) => {
+                if (admins.length === 0) return
+                return Notification.insertMany(
+                  admins.map((a) => ({
+                    recipient: a._id,
+                    type: 'invoice_uploaded',
+                    read: false,
+                    data: {
+                      projectId: projectId.toString(),
+                      projectName: project.name,
+                      collaboratorName,
+                    },
+                  }))
+                )
+              })
+              .then(() => {})
+              .catch((err) => console.error('Notification create error:', err))
+            // Email admin(s) (optional, keep existing behavior)
+            User.find({ role: 'admin' })
+              .then((admins) => admins.map((a) => a.email).filter(Boolean))
+              .then((adminEmails) => {
+                if (adminEmails.length === 0) return
+                return sendAdminInvoiceUploadedEmail(adminEmails, {
+                  kind: 'per-project',
+                  projectName: project.name,
+                  projectId: projectId.toString(),
+                  collaboratorName,
+                })
+              })
+              .catch((err) => console.error('Admin invoice notification error:', err))
 
             ApiResponse.success(res, {
               url: result.secure_url,
@@ -424,6 +464,41 @@ export class UploadController {
             )
 
             await Promise.all(updatePromises)
+
+            // Create in-app notifications for each admin (fire-and-forget)
+            const collaboratorName = collaborator.first_name || collaborator.last_name
+              ? [collaborator.first_name, collaborator.last_name].filter(Boolean).join(' ')
+              : undefined
+            User.find({ role: 'admin' })
+              .then((admins) => {
+                if (admins.length === 0) return
+                return Notification.insertMany(
+                  admins.map((a) => ({
+                    recipient: a._id,
+                    type: 'monthly_invoice_uploaded',
+                    read: false,
+                    data: {
+                      month,
+                      projectsCount: projects.length,
+                      collaboratorName,
+                    },
+                  }))
+                )
+              })
+              .then(() => {})
+              .catch((err) => console.error('Notification create error:', err))
+            User.find({ role: 'admin' })
+              .then((admins) => admins.map((a) => a.email).filter(Boolean))
+              .then((adminEmails) => {
+                if (adminEmails.length === 0) return
+                return sendAdminInvoiceUploadedEmail(adminEmails, {
+                  kind: 'monthly',
+                  month,
+                  projectsCount: projects.length,
+                  collaboratorName,
+                })
+              })
+              .catch((err) => console.error('Admin monthly invoice notification error:', err))
 
             // Calculate total amount
             const totalAmount = projects.reduce((sum, project) => {
