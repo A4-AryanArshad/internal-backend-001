@@ -20,6 +20,10 @@ router.get('/my-projects', authenticate, ProjectController.getMyProjects)
 // Get all projects for a client (by email) - for admin use
 router.get('/client/:email', ProjectController.getClientProjects)
 
+// Invoice routes - must be before :projectId
+router.get('/invoices/accepted-overview', authenticate, ProjectController.getAcceptedInvoicesOverview)
+router.get('/invoices/monthly', authenticate, ProjectController.getMonthlyInvoices)
+
 // Get project by ID (for client link validation)
 router.get('/:projectId', validateProjectId, ProjectController.getProject)
 
@@ -46,9 +50,6 @@ router.post('/:projectId/invoice/approve', validateProjectId, authenticate, Proj
 
 // Reject invoice (admin)
 router.post('/:projectId/invoice/reject', validateProjectId, authenticate, ProjectController.rejectInvoice)
-
-// Get all monthly invoices (admin)
-router.get('/invoices/monthly', authenticate, ProjectController.getMonthlyInvoices)
 
 export default router
 

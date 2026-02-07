@@ -559,4 +559,144 @@ export class ProjectController {
     }
   }
 
+  // Get all accepted (approved) invoices + amount paid per invoice + amount left to pay per collaborator (admin)
+  static async getAcceptedInvoicesOverview(req: Request, res: Response) {
+    try {
+      const { Collaborator } = await import('../models/Collaborator')
+
+      const approvedProjects = await Project.find({
+        invoice_status: 'approved',
+        invoice_url: { $exists: true, $ne: null },
+        assigned_collaborator: { $exists: true, $ne: null },
+      })
+        .populate('assigned_collaborator', 'first_name last_name')
+        .sort({ invoice_approved_at: -1 })
+
+      const invoiceRows: Array<{
+        id: string
+        type: 'per-project' | 'monthly'
+        label: string
+        collaboratorId: string
+        collaboratorName: string
+        amount: number
+        paid: boolean
+        paidAt?: string
+        projectId?: string
+        monthlyInvoiceId?: string
+        month?: string
+      }> = []
+
+      const monthlySeen = new Set<string>()
+
+      for (const p of approvedProjects) {
+        const collab = p.assigned_collaborator as any
+        const collaboratorId = collab?._id?.toString() || ''
+        const collaboratorName = collab
+          ? `${collab.first_name || ''} ${collab.last_name || ''}`.trim() || 'Unknown'
+          : 'Unknown'
+        const amount = p.collaborator_payment_amount || 0
+        const paid = !!p.collaborator_paid
+        const paidAt = p.collaborator_paid_at
+          ? new Date(p.collaborator_paid_at).toISOString()
+          : undefined
+
+        if (p.invoice_type === 'monthly' && p.monthly_invoice_id) {
+          if (!monthlySeen.has(p.monthly_invoice_id)) {
+            monthlySeen.add(p.monthly_invoice_id)
+            const group = approvedProjects.filter(
+              (x: any) => x.monthly_invoice_id === p.monthly_invoice_id
+            )
+            const totalAmount = group.reduce(
+              (sum: number, x: any) => sum + (x.collaborator_payment_amount || 0),
+              0
+            )
+            const allPaid = group.every((x: any) => x.collaborator_paid)
+            const firstPaidAt = group.find((x: any) => x.collaborator_paid_at)
+              ?.collaborator_paid_at
+            const monthLabel = p.monthly_invoice_month
+              ? new Date(p.monthly_invoice_month + '-01').toLocaleDateString('en-US', {
+                  month: 'long',
+                  year: 'numeric',
+                })
+              : 'Monthly'
+            invoiceRows.push({
+              id: p.monthly_invoice_id,
+              type: 'monthly',
+              label: `${monthLabel} – Monthly Invoice`,
+              collaboratorId,
+              collaboratorName,
+              amount: totalAmount,
+              paid: allPaid,
+              paidAt: firstPaidAt
+                ? new Date(firstPaidAt).toISOString()
+                : undefined,
+              monthlyInvoiceId: p.monthly_invoice_id,
+              month: p.monthly_invoice_month,
+            })
+          }
+        } else {
+          invoiceRows.push({
+            id: (p._id as any).toString(),
+            type: 'per-project',
+            label: p.name,
+            collaboratorId,
+            collaboratorName,
+            amount,
+            paid,
+            paidAt,
+            projectId: (p._id as any).toString(),
+          })
+        }
+      }
+
+      const collaborators = await Collaborator.find().sort({ first_name: 1, last_name: 1 })
+      const byCollaborator: Array<{
+        collaboratorId: string
+        collaboratorName: string
+        totalPaid: number
+        totalLeftToPay: number
+      }> = []
+
+      for (const c of collaborators) {
+        const cid = (c._id as any).toString()
+        const paidProjects = approvedProjects.filter(
+          (p: any) =>
+            (p.assigned_collaborator?._id?.toString() || p.assigned_collaborator?.toString()) ===
+              cid && p.collaborator_paid
+        )
+        const unpaidProjects = approvedProjects.filter(
+          (p: any) =>
+            (p.assigned_collaborator?._id?.toString() || p.assigned_collaborator?.toString()) ===
+              cid && !p.collaborator_paid
+        )
+        const totalPaid = paidProjects.reduce(
+          (sum: number, p: any) => sum + (p.collaborator_payment_amount || 0),
+          0
+        )
+        const totalLeftToPay = unpaidProjects.reduce(
+          (sum: number, p: any) => sum + (p.collaborator_payment_amount || 0),
+          0
+        )
+        if (totalPaid > 0 || totalLeftToPay > 0) {
+          byCollaborator.push({
+            collaboratorId: cid,
+            collaboratorName: `${c.first_name} ${c.last_name}`,
+            totalPaid,
+            totalLeftToPay,
+          })
+        }
+      }
+
+      return ApiResponse.success(
+        res,
+        {
+          acceptedInvoices: invoiceRows,
+          byCollaborator,
+        },
+        'Accepted invoices overview retrieved successfully'
+      )
+    } catch (error: any) {
+      return ApiResponse.error(res, error.message, 500)
+    }
+  }
 }
