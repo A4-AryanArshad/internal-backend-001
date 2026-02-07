@@ -14,12 +14,14 @@ export class ProjectController {
         return ApiResponse.notFound(res, 'Project not found or invalid link')
       }
 
-      // Client role: only allow access to projects they own (client_email matches)
+      // Client role: allow access if they own the project OR project is unclaimed/unpaid (so they can start purchase flow)
       const authReq = req as AuthRequest
       if (authReq.user?.role === 'client') {
         const projectEmail = (project.client_email || '').toLowerCase()
         const userEmail = (authReq.user.email || '').toLowerCase()
-        if (projectEmail && projectEmail !== userEmail) {
+        const isOwner = projectEmail && projectEmail === userEmail
+        const isUnclaimedOrUnpaid = !projectEmail || project.payment_status !== 'paid'
+        if (!isOwner && !isUnclaimedOrUnpaid) {
           return ApiResponse.error(res, 'You do not have access to this project', 403)
         }
       }
@@ -78,12 +80,14 @@ export class ProjectController {
         return ApiResponse.notFound(res, 'Project not found')
       }
 
-      // Client role: only allow access to projects they own (client_email matches)
+      // Client role: allow access if they own the project OR project is unclaimed/unpaid (so they can start purchase flow)
       const authReq = req as AuthRequest
       if (authReq.user?.role === 'client') {
         const projectEmail = (project.client_email || '').toLowerCase()
         const userEmail = (authReq.user.email || '').toLowerCase()
-        if (projectEmail && projectEmail !== userEmail) {
+        const isOwner = projectEmail && projectEmail === userEmail
+        const isUnclaimedOrUnpaid = !projectEmail || project.payment_status !== 'paid'
+        if (!isOwner && !isUnclaimedOrUnpaid) {
           return ApiResponse.error(res, 'You do not have access to this project', 403)
         }
       }
