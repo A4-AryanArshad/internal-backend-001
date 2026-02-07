@@ -367,7 +367,7 @@ export class ProjectController {
     }
   }
 
-  // Assign collaborator
+  // Assign collaborator (only after client has paid)
   static async assignCollaborator(req: Request, res: Response) {
     try {
       const { projectId } = req.params
@@ -379,6 +379,19 @@ export class ProjectController {
 
       if (!payment_amount || payment_amount <= 0) {
         return ApiResponse.error(res, 'Payment amount is required and must be greater than 0', 400)
+      }
+
+      // Require client payment before assigning a collaborator
+      const existingProject = await Project.findById(projectId)
+      if (!existingProject) {
+        return ApiResponse.notFound(res, 'Project not found')
+      }
+      if (existingProject.payment_status !== 'paid') {
+        return ApiResponse.error(
+          res,
+          'Client must complete payment before you can assign a collaborator.',
+          400
+        )
       }
 
       // Verify collaborator exists

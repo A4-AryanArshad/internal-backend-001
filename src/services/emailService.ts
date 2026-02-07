@@ -60,32 +60,38 @@ export const sendClientDashboardEmail = async (
       <!DOCTYPE html>
       <html>
         <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <style>
-            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-            .header { background: #1d4ed8; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
-            .content { background: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px; }
-            .button { display: inline-block; padding: 12px 24px; background: #1d4ed8; color: white; text-decoration: none; border-radius: 6px; margin: 20px 0; }
-            .footer { text-align: center; margin-top: 20px; color: #6b7280; font-size: 12px; }
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #1f2937; margin: 0; padding: 0; background: #f3f4f6; }
+            .container { max-width: 560px; margin: 0 auto; padding: 24px; }
+            .card { background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+            .header { background: #ea580c; padding: 24px 20px; text-align: center; }
+            .header h1 { margin: 0; font-size: 1.5rem; font-weight: 700; color: #ffffff; }
+            .content { padding: 28px 24px; background: #ffffff; color: #374151; }
+            .content p { margin: 0 0 1rem; font-size: 15px; }
+            .btn-wrap { text-align: center; margin: 24px 0; }
+            .link-box { background: #f3f4f6; padding: 12px 14px; border-radius: 8px; word-break: break-all; font-size: 13px; color: #4b5563; margin: 16px 0; border: 1px solid #e5e7eb; }
+            .footer { text-align: center; padding: 20px; color: #9ca3af; font-size: 12px; }
           </style>
         </head>
         <body>
           <div class="container">
-            <div class="header">
-              <h1>Your Project is Ready!</h1>
-            </div>
-            <div class="content">
-              <p>Hi ${clientName},</p>
-              <p>Great news! Your project <strong>${projectName}</strong> is now active.</p>
-              <p>You can track your project progress, view updates, and see the status at any time using the link below:</p>
-              <p style="text-align: center;">
-                <a href="${dashboardUrl}" class="button">View Project Dashboard</a>
-              </p>
-              <p>Or copy this link:</p>
-              <p style="background: #e5e7eb; padding: 10px; border-radius: 4px; word-break: break-all;">
-                ${dashboardUrl}
-              </p>
-              <p>This link is private and secure. Only you can access your project dashboard.</p>
+            <div class="card">
+              <div class="header">
+                <h1>Your Project is Ready!</h1>
+              </div>
+              <div class="content">
+                <p>Hi ${clientName},</p>
+                <p>Great news! Your project <strong>${projectName}</strong> is now active.</p>
+                <p>You can track your project progress, view updates, and see the status at any time using the link below:</p>
+                <div class="btn-wrap">
+                  <a href="${dashboardUrl}" style="display: inline-block; padding: 14px 28px; background-color: #ea580c; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">View Project Dashboard</a>
+                </div>
+                <p>Or copy this link:</p>
+                <div class="link-box">${dashboardUrl}</div>
+                <p>This link is private and secure. Only you can access your project dashboard.</p>
+              </div>
             </div>
             <div class="footer">
               <p>This is an automated message. Please do not reply.</p>
