@@ -183,17 +183,10 @@ export class ProjectController {
     }
   }
 
-  // Get all simple projects (catalog only: templates with no client, so each package appears once)
+  // Get all simple (predefined) projects for the catalog – show all so users can see and choose
   static async getSimpleProjects(req: Request, res: Response) {
     try {
-      const projects = await Project.find({
-        project_type: 'simple',
-        $or: [
-          { client_email: { $exists: false } },
-          { client_email: null },
-          { client_email: '' },
-        ],
-      })
+      const projects = await Project.find({ project_type: 'simple' })
         .populate('selected_service')
         .sort({ created_at: -1 })
 
