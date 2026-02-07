@@ -1,36 +1,31 @@
 import nodemailer from 'nodemailer'
 
-// Configure email transporter
-// Uses Gmail SMTP with app password authentication
-const createTransporter = () => {
-  // Hardcoded Gmail credentials
-  const gmailUser = 'aryanarshadlex5413@gmail.com'
-  const gmailPass = '' // Add your Gmail app password here if needed
+// Configure email transporter (hardcoded Gmail credentials)
+const GMAIL_USER = 'aryanarshadlex5413@gmail.com'
+const GMAIL_APP_PASSWORD = 'gpua cmsh kixf sadu'.replace(/\s/g, '') // strip spaces for SMTP
 
-  // If no credentials, use console logging for development
-  if (!gmailUser || !gmailPass) {
-    console.warn('⚠️  Gmail credentials not configured. Emails will be logged to console.')
+const createTransporter = () => {
+  if (!GMAIL_USER || !GMAIL_APP_PASSWORD) {
+    console.warn('⚠️  Gmail credentials not configured. Emails will be logged to console only.')
     return {
       sendMail: async (options: any) => {
         console.log('\n📧 EMAIL WOULD BE SENT:')
         console.log('To:', options.to)
         console.log('Subject:', options.subject)
-        console.log('Body:', options.text || options.html)
         console.log('---\n')
         return { messageId: 'dev-' + Date.now() }
       }
     }
   }
 
-  // Use Gmail SMTP
   return nodemailer.createTransport({
     service: 'gmail',
     host: 'smtp.gmail.com',
     port: 587,
-    secure: false, // true for 465, false for other ports
+    secure: false,
     auth: {
-      user: gmailUser,
-      pass: gmailPass,
+      user: GMAIL_USER,
+      pass: GMAIL_APP_PASSWORD,
     },
   })
 }
@@ -57,10 +52,8 @@ export const sendClientDashboardEmail = async (
   console.log('🔗 Direct Project Link:', `${FRONTEND_URL}/client/${projectId}`)
   console.log('='.repeat(80) + '\n')
 
-  const gmailUser = 'aryanarshadlex5413@gmail.com'
-  
   const mailOptions = {
-    from: `"Client Project Portal" <${gmailUser}>`,
+    from: `"Client Project Portal" <${GMAIL_USER}>`,
     to: clientEmail,
     subject: `Your Project Dashboard: ${projectName}`,
     html: `
