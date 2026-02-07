@@ -6,8 +6,8 @@ import { authenticate } from '../middleware/auth'
 
 const router = Router()
 
-// Create Stripe checkout session
-router.post('/:projectId/checkout', validateProjectId, PaymentController.createCheckoutSession)
+// Create Stripe checkout session (authenticated so we can link project to user)
+router.post('/:projectId/checkout', authenticate, validateProjectId, PaymentController.createCheckoutSession)
 
 // Stripe webhook (must use raw body)
 router.post(

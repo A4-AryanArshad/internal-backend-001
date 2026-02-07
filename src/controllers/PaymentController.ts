@@ -12,12 +12,27 @@ export class PaymentController {
     try {
       const { projectId } = req.params
       const { serviceId, customAmount } = req.body
+      const authReq = req as AuthRequest
+      const userEmail = authReq.user?.email
+      const userId = authReq.user?.userId
 
       // Verify project exists
       const project = await Project.findById(projectId)
 
       if (!project) {
         return ApiResponse.notFound(res, 'Project not found')
+      }
+
+      // Link project to current user so it appears in "My projects" (paid or unpaid)
+      const updateData: any = {}
+      if (userEmail && !project.client_email) {
+        updateData.client_email = userEmail
+      }
+      if (userId && !project.client_user) {
+        updateData.client_user = userId
+      }
+      if (Object.keys(updateData).length > 0) {
+        await Project.findByIdAndUpdate(projectId, updateData)
       }
 
       // Determine amount
@@ -61,7 +76,7 @@ export class PaymentController {
           },
         ],
         mode: 'payment',
-        customer_email: project.client_email || undefined, // Pre-fill email if available
+        customer_email: project.client_email || userEmail || undefined, // Pre-fill email if available
         billing_address_collection: 'required', // Collect billing address (includes email)
         success_url: `${FRONTEND_URL}/client/${projectId}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${FRONTEND_URL}/client/${projectId}/payment?payment=cancelled`,

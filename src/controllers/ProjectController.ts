@@ -195,16 +195,22 @@ export class ProjectController {
     }
   }
 
-  // Get all projects for authenticated client (uses JWT token)
+  // Get all projects for authenticated client (uses JWT token) – paid and unpaid
   static async getMyProjects(req: Request, res: Response) {
     try {
       const userEmail = (req as any).user?.email
+      const userId = (req as any).user?.userId
 
       if (!userEmail) {
         return ApiResponse.error(res, 'User not authenticated', 401)
       }
 
-      const projects = await Project.find({ client_email: userEmail })
+      const query: any = { $or: [{ client_email: userEmail }] }
+      if (userId) {
+        query.$or.push({ client_user: userId })
+      }
+
+      const projects = await Project.find(query)
         .populate('selected_service')
         .sort({ created_at: -1 })
 
